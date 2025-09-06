@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,6 +35,37 @@ interface SubnetEnumerationResult {
 }
 
 export default function IPv6SubnetCalculator() {
+  // Fungsi untuk mengunduh tabel sebagai CSV
+  const downloadCSV = () => {
+    if (!subnetEnumeration || !subnetEnumeration.subnets || subnetEnumeration.subnets.length === 0) {
+      alert("No data to download.");
+      return;
+    }
+    const headers = ["Subnet ID", "Subnet Address", "Host Address Range", "Notation"];
+    const rows = subnetEnumeration.subnets.map((subnet: any) => [
+      subnet.id,
+      subnet.subnetAddress,
+      `${subnet.hostRangeStart} - ${subnet.hostRangeEnd}`,
+      subnet.notation
+    ]);
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row: any[]) => row.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    ].join("\r\n");
+    try {
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `ipv6_subnets_page${currentPage}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Failed to download CSV. Please try again.");
+    }
+  };
   const [ipv6Address, setIpv6Address] = useState("")
   const [prefixLength, setPrefixLength] = useState("")
   const [result, setResult] = useState<CalculationResult | null>(null)
@@ -47,6 +78,7 @@ export default function IPv6SubnetCalculator() {
   const [subnetsPerPage] = useState(1000)
   const [searchNotation, setSearchNotation] = useState("")
   const [searchResult, setSearchResult] = useState<any>(null)
+  const splitTableRef = useRef<HTMLDivElement | null>(null)
 
   const isValidIPv6 = (address: string): boolean => {
     const ipv6Regex = /^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}$/
@@ -214,7 +246,7 @@ export default function IPv6SubnetCalculator() {
     }
   }
 
-  const enumerateSubnets = (page = 1) => {
+  const enumerateSubnets = (page = 1, scroll = false) => {
     if (!result || !targetSubnetPrefix) {
       setError("Please calculate the main subnet first and select a target prefix")
       return
@@ -233,7 +265,7 @@ export default function IPv6SubnetCalculator() {
       return
     }
 
-    try {
+  try {
       const networkAddress = ipv6ToBigInt(result.networkAddress)
       const subnetBits = targetPrefix - currentPrefix
       const totalSubnets = BigInt(1) << BigInt(subnetBits)
@@ -269,6 +301,11 @@ export default function IPv6SubnetCalculator() {
       setCurrentPage(page)
       setShowSubnetList(true)
       setError("")
+      if (scroll && splitTableRef.current) {
+        setTimeout(() => {
+          splitTableRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
+      }
     } catch (err) {
       setError("Error enumerating subnets. Please check your input.")
     }
@@ -363,7 +400,7 @@ export default function IPv6SubnetCalculator() {
   return (
     <div className="min-h-screen bg-gray-100 p-4 flex items-center justify-center flex-col">
       <p className="text-sm text-muted-foreground max-w-4xl mx-auto mb-6 text-center">
-        Calculate IPv6 network addresses, host ranges, enumerate all possible subnets, and check notations within a given block.
+        Calculate IPv6 network addresses, host ranges, Split subnets (Split large CIDR to small CIDR), and check notations within a given block.
       </p>
       <Card className="w-full max-w-6xl">
         <CardHeader>
@@ -404,7 +441,7 @@ export default function IPv6SubnetCalculator() {
 
           {result && (
             <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold mb-4">Subnet Enumeration</h3>
+              <h3 className="text-lg font-semibold mb-4">Subnet Splitter</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <Label htmlFor="network-block">Network Address Block</Label>
@@ -434,8 +471,8 @@ export default function IPv6SubnetCalculator() {
                   </Select>
                 </div>
               </div>
-              <Button onClick={() => enumerateSubnets(1)} className="w-full md:w-auto">
-                Enumerate Subnets
+              <Button onClick={() => enumerateSubnets(1, true)} className="w-full md:w-auto">
+                Split Subnets
               </Button>
             </div>
           )}
@@ -479,7 +516,7 @@ export default function IPv6SubnetCalculator() {
           )}
 
           {subnetEnumeration && showSubnetList && (
-            <div className="space-y-4">
+            <div className="space-y-4" ref={splitTableRef}>
               <div className="flex justify-between items-center">
                 <h4 className="text-lg font-semibold">Subnet Details (/{subnetEnumeration.targetPrefix})</h4>
                 <div className="text-sm text-muted-foreground">
@@ -523,24 +560,26 @@ export default function IPv6SubnetCalculator() {
               )}
 
               {getTotalPages() > 1 && (
-                <div className="flex justify-center items-center gap-2 mb-4">
-                  <Button variant="outline" size="sm" onClick={() => handlePageChange(1)} disabled={currentPage === 1}>
+                <div className="flex flex-wrap justify-center items-center gap-2 mb-4">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto mb-2 sm:mb-0" onClick={() => handlePageChange(1)} disabled={currentPage === 1}>
                     First
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto mb-2 sm:mb-0"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
                   >
                     Previous
                   </Button>
-                  <span className="px-4 py-2 text-sm">
+                  <span className="px-4 py-2 text-sm w-full sm:w-auto text-center">
                     Page {currentPage} of {getTotalPages()}
                   </span>
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto mb-2 sm:mb-0"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === getTotalPages()}
                   >
@@ -549,10 +588,19 @@ export default function IPv6SubnetCalculator() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto mb-2 sm:mb-0"
                     onClick={() => handlePageChange(getTotalPages())}
                     disabled={currentPage === getTotalPages()}
                   >
                     Last
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={downloadCSV}
+                  >
+                    Download CSV
                   </Button>
                 </div>
               )}
@@ -610,6 +658,18 @@ export default function IPv6SubnetCalculator() {
         )}
         </CardContent>
       </Card>
+      <p className="text-xs text-muted-foreground max-w-4xl mx-auto mt-4 text-center">
+        Designed by Irsyad Khoirul Anwar (
+        <a
+          href="https://www.as205018.net/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-blue-600 transition-colors"
+        >
+          AS205018
+        </a>
+        )
+      </p>
     </div>
   )
 }
