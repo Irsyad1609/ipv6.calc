@@ -142,50 +142,52 @@ export default function IPv6SubnetCalculator() {
   }
 
   const calculateSubnetBreakdown = (currentPrefix: number) => {
-    const commonPrefixes = [48, 56, 60, 64, 72, 80, 96, 112, 120, 128]
-    const breakdown = []
-
+  const commonPrefixes = [29, 32, 48, 56, 60, 64, 96, 112, 120, 126, 127, 128];
+    const breakdown = [];
     for (const targetPrefix of commonPrefixes) {
       if (targetPrefix > currentPrefix) {
-        const subnetCount = BigInt(1) << BigInt(targetPrefix - currentPrefix)
-        const description = getSubnetDescription(targetPrefix)
+        const subnetCount = BigInt(1) << BigInt(targetPrefix - currentPrefix);
+        const description = getSubnetDescription(targetPrefix);
         breakdown.push({
           prefix: targetPrefix,
           count: subnetCount.toString(),
           description,
-        })
+        });
       }
     }
-
-    return breakdown
-  }
+    return breakdown;
+  };
 
   const getSubnetDescription = (prefix: number): string => {
     switch (prefix) {
+      case 29:
+        return "Large ISP allocation (rare, special case)";
+      case 32:
+        return "ISP/LIR allocation (RIR standard block)";
       case 48:
-        return "Site prefix (ISP allocation to customer)"
+        return "Site prefix (ISP allocation to customer)";
       case 56:
-        return "Customer site (recommended for home users)"
+        return "Customer site (small business/home)";
       case 60:
-        return "Customer site (alternative for home users)"
+        return "Customer site (smaller home)";
       case 64:
-        return "Subnet (standard network segment - RFC recommended)"
-      case 72:
-        return "Point-to-point links"
-      case 80:
-        return "Small subnets"
+        return "Standard subnet (LAN, VLAN, WiFi, etc)";
       case 96:
-        return "IPv4-embedded IPv6 addresses"
+        return "IPv4-embedded IPv6 addresses (transition)";
       case 112:
-        return "Very small subnets"
+        return "Very small subnet (device mgmt)";
       case 120:
-        return "Host subnets (8 hosts)"
+        return "Host subnet (device mgmt)";
+      case 126:
+        return "Point-to-point link (legacy/compat)";
+      case 127:
+        return "Point-to-point link (RFC 6164, recommended)";
       case 128:
-        return "Single host address"
+        return "Single host address (usually for loopback, interface, or unique host)";
       default:
-        return "Custom subnet size"
+        return "Custom subnet size";
     }
-  }
+  };
 
   const calculateSubnet = () => {
     setError("")
@@ -405,7 +407,7 @@ export default function IPv6SubnetCalculator() {
       <Card className="w-full max-w-6xl">
         <CardHeader>
           <div className="text-center space-y-2">
-            <CardTitle className="text-2xl font-bold">IPv6 Subnet Calculator</CardTitle>
+            <CardTitle className="text-2xl font-bold">IPv6 Subnet Calculator & Subnet Splitter</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -438,44 +440,59 @@ export default function IPv6SubnetCalculator() {
           <Button onClick={calculateSubnet} className="w-full md:w-auto">
             Calculate
           </Button>
-
-          {result && (
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold mb-4">Subnet Splitter</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <Label htmlFor="network-block">Network Address Block</Label>
-                  <Input
-                    id="network-block"
-                    value={`${result.networkAddress}/${prefixLength}`}
-                    readOnly
-                    className="font-mono bg-gray-50"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="target-prefix">Target Subnet Size</Label>
-                  <Select value={targetSubnetPrefix} onValueChange={setTargetSubnetPrefix}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select target prefix" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {generatePrefixOptions().map((prefix) => {
-                        const subnetCount = BigInt(1) << BigInt(prefix - Number.parseInt(prefixLength))
-                        return (
-                          <SelectItem key={prefix} value={prefix.toString()}>
-                            /{prefix} ({subnetCount.toString()} subnets)
-                          </SelectItem>
-                        )
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold mb-4">Subnet Splitter</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <Label htmlFor="network-block">Network Address Block</Label>
+                <Input
+                  id="network-block"
+                  value={
+                    result
+                      ? `${result.networkAddress}/${prefixLength}`
+                      : ipv6Address && prefixLength
+                        ? `${ipv6Address}/${prefixLength}`
+                        : ""
+                  }
+                  readOnly
+                  className="font-mono bg-gray-50"
+                  disabled={!result}
+                />
               </div>
-              <Button onClick={() => enumerateSubnets(1, true)} className="w-full md:w-auto">
-                Split Subnets
-              </Button>
+              <div>
+                <Label htmlFor="target-prefix">Target Subnet Size</Label>
+                <Select
+                  value={targetSubnetPrefix}
+                  onValueChange={setTargetSubnetPrefix}
+                  disabled={!result}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select target prefix" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {result && generatePrefixOptions().map((prefix) => {
+                      const subnetCount = BigInt(1) << BigInt(prefix - Number.parseInt(prefixLength))
+                      return (
+                        <SelectItem key={prefix} value={prefix.toString()}>
+                          /{prefix} ({subnetCount.toString()} subnets)
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          )}
+            <Button
+              onClick={() => enumerateSubnets(1, true)}
+              className="w-full md:w-auto"
+              disabled={!result}
+            >
+              Split Subnets
+            </Button>
+            {!result && (
+              <p className="text-xs text-muted-foreground mt-2">Enter a valid IPv6 address and prefix, then click Calculate to enable subnet splitting.</p>
+            )}
+          </div>
 
           {error && (
             <Alert variant="destructive">
@@ -603,7 +620,7 @@ export default function IPv6SubnetCalculator() {
                   className="w-full sm:w-auto"
                   onClick={downloadCSV}
                 >
-                  Download CSV
+                  Download Table .csv
                 </Button>
               </div>
 
