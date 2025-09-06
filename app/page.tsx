@@ -594,16 +594,18 @@ export default function IPv6SubnetCalculator() {
                   >
                     Last
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={downloadCSV}
-                  >
-                    Download CSV
-                  </Button>
                 </div>
               )}
+              <div className="flex justify-center mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  onClick={downloadCSV}
+                >
+                  Download CSV
+                </Button>
+              </div>
 
               <div className="overflow-x-auto max-h-96 overflow-y-auto">
                 <table className="w-full border-collapse border border-gray-300">
